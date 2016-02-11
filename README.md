@@ -25,6 +25,7 @@ func main() {
         StderrWriter(os.Stderr).
         StdoutPrefix("OUT:").
         StderrPrefix("ERR:").
+        AutoFlush().
         Build()
 
     if err != nil {
