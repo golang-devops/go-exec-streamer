@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os/exec"
 )
 
 //ExecStreamer is the streamer interface (built by the ExecStreamerBuilder)
 type ExecStreamer interface {
+	StartExec() (*exec.Cmd, error)
 	ExecAndWait() error
 }
 
@@ -36,11 +38,11 @@ func (e *execStreamer) flushIfEnabled(writer io.Writer) {
 	}
 }
 
-//ExecAndWait will execute the command using the given executor and wait until completion
-func (e *execStreamer) ExecAndWait() error {
+//StartExec will execute the command using the given executor and return (without waiting for completion) with the exec.Cmd
+func (e *execStreamer) StartExec() (*exec.Cmd, error) {
 	x, err := NewExecutorFromName(e.ExecutorName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	cmd := x.GetCommand(e.Exe, e.Args...)
@@ -54,12 +56,12 @@ func (e *execStreamer) ExecAndWait() error {
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	stdoutScanner := bufio.NewScanner(stdout)
@@ -79,6 +81,16 @@ func (e *execStreamer) ExecAndWait() error {
 	}()
 
 	err = cmd.Start()
+	if err != nil {
+		return nil, err
+	}
+
+	return cmd, nil
+}
+
+//ExecAndWait will execute the command using the given executor and wait until completion
+func (e *execStreamer) ExecAndWait() error {
+	cmd, err := e.StartExec()
 	if err != nil {
 		return err
 	}
