@@ -38,7 +38,14 @@ func (e *execStreamer) flushIfEnabled(writer io.Writer) {
 	}
 }
 
+func (e *execStreamer) recoverPanic() {
+	if r := recover(); r != nil {
+		fmt.Fprintf(e.StderrWriter, "EXEC_STREAM_RECOVERY: %T %+v", r, r)
+	}
+}
+
 func (e *execStreamer) handleStdout(stdoutScanner *bufio.Scanner) {
+	defer e.recoverPanic()
 	for stdoutScanner.Scan() {
 		fmt.Fprintf(e.StdoutWriter, "%s%s\n", e.StdoutPrefix, stdoutScanner.Text())
 		e.flushIfEnabled(e.StdoutWriter)
@@ -46,6 +53,7 @@ func (e *execStreamer) handleStdout(stdoutScanner *bufio.Scanner) {
 }
 
 func (e *execStreamer) handleStderr(stderrScanner *bufio.Scanner) {
+	defer e.recoverPanic()
 	for stderrScanner.Scan() {
 		fmt.Fprintf(e.StderrWriter, "%s%s\n", e.StderrPrefix, stderrScanner.Text())
 		e.flushIfEnabled(e.StderrWriter)
