@@ -38,6 +38,20 @@ func (e *execStreamer) flushIfEnabled(writer io.Writer) {
 	}
 }
 
+func (e *execStreamer) handleStdout(stdoutScanner *bufio.Scanner) {
+	for stdoutScanner.Scan() {
+		fmt.Fprintf(e.StdoutWriter, "%s%s\n", e.StdoutPrefix, stdoutScanner.Text())
+		e.flushIfEnabled(e.StdoutWriter)
+	}
+}
+
+func (e *execStreamer) handleStderr(stderrScanner *bufio.Scanner) {
+	for stderrScanner.Scan() {
+		fmt.Fprintf(e.StderrWriter, "%s%s\n", e.StderrPrefix, stderrScanner.Text())
+		e.flushIfEnabled(e.StderrWriter)
+	}
+}
+
 //StartExec will execute the command using the given executor and return (without waiting for completion) with the exec.Cmd
 func (e *execStreamer) StartExec() (*exec.Cmd, error) {
 	x, err := NewExecutorFromName(e.ExecutorName)
@@ -65,20 +79,10 @@ func (e *execStreamer) StartExec() (*exec.Cmd, error) {
 	}
 
 	stdoutScanner := bufio.NewScanner(stdout)
-	go func() {
-		for stdoutScanner.Scan() {
-			fmt.Fprintf(e.StdoutWriter, "%s%s\n", e.StdoutPrefix, stdoutScanner.Text())
-			e.flushIfEnabled(e.StdoutWriter)
-		}
-	}()
+	go e.handleStdout(stdoutScanner)
 
 	stderrScanner := bufio.NewScanner(stderr)
-	go func() {
-		for stderrScanner.Scan() {
-			fmt.Fprintf(e.StderrWriter, "%s%s\n", e.StderrPrefix, stderrScanner.Text())
-			e.flushIfEnabled(e.StderrWriter)
-		}
-	}()
+	go e.handleStderr(stderrScanner)
 
 	err = cmd.Start()
 	if err != nil {
