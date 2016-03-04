@@ -6,6 +6,9 @@ import (
 	"io"
 	"net/http"
 	"os/exec"
+	"runtime/debug"
+	"strings"
+	"sync"
 )
 
 //ExecStreamer is the streamer interface (built by the ExecStreamerBuilder)
@@ -15,6 +18,8 @@ type ExecStreamer interface {
 }
 
 type execStreamer struct {
+	stdOutAndErrWaitGroup *sync.WaitGroup
+
 	ExecutorName string
 	Exe          string
 	Args         []string
@@ -28,24 +33,31 @@ type execStreamer struct {
 	StderrPrefix string
 
 	AutoFlush bool
+
+	DebugInfo string
+}
+
+func (e *execStreamer) recoverPanic(description string) {
+	if r := recover(); r != nil {
+		defer recover()
+		fmt.Println(fmt.Sprintf("Exec-Stream-Recovery (%s - debug info: %s): %T %+v. Stack: %s\n------END STACK---------\n", description, e.DebugInfo, r, r, strings.Replace(string(debug.Stack()), "\n", "\\n", -1)))
+	}
 }
 
 func (e *execStreamer) flushIfEnabled(writer io.Writer) {
-	if e.AutoFlush {
+	if e.AutoFlush && writer != nil {
 		if flusher, ok := writer.(http.Flusher); ok {
-			flusher.Flush()
+			defer e.recoverPanic("flushIfEnabled")
+			if flusher != nil {
+				flusher.Flush()
+			}
 		}
 	}
 }
 
-func (e *execStreamer) recoverPanic() {
-	if r := recover(); r != nil {
-		fmt.Fprintf(e.StderrWriter, "EXEC_STREAM_RECOVERY: %T %+v", r, r)
-	}
-}
-
 func (e *execStreamer) handleStdout(stdoutScanner *bufio.Scanner) {
-	defer e.recoverPanic()
+	defer e.recoverPanic("handleStdout")
+	defer e.stdOutAndErrWaitGroup.Done()
 	for stdoutScanner.Scan() {
 		fmt.Fprintf(e.StdoutWriter, "%s%s\n", e.StdoutPrefix, stdoutScanner.Text())
 		e.flushIfEnabled(e.StdoutWriter)
@@ -53,7 +65,8 @@ func (e *execStreamer) handleStdout(stdoutScanner *bufio.Scanner) {
 }
 
 func (e *execStreamer) handleStderr(stderrScanner *bufio.Scanner) {
-	defer e.recoverPanic()
+	defer e.recoverPanic("handleStderr")
+	defer e.stdOutAndErrWaitGroup.Done()
 	for stderrScanner.Scan() {
 		fmt.Fprintf(e.StderrWriter, "%s%s\n", e.StderrPrefix, stderrScanner.Text())
 		e.flushIfEnabled(e.StderrWriter)
@@ -86,16 +99,20 @@ func (e *execStreamer) StartExec() (*exec.Cmd, error) {
 		return nil, err
 	}
 
-	stdoutScanner := bufio.NewScanner(stdout)
-	go e.handleStdout(stdoutScanner)
-
-	stderrScanner := bufio.NewScanner(stderr)
-	go e.handleStderr(stderrScanner)
-
 	err = cmd.Start()
 	if err != nil {
 		return nil, err
 	}
+
+	e.stdOutAndErrWaitGroup = &sync.WaitGroup{}
+
+	e.stdOutAndErrWaitGroup.Add(1)
+	stdoutScanner := bufio.NewScanner(stdout)
+	go e.handleStdout(stdoutScanner)
+
+	e.stdOutAndErrWaitGroup.Add(1)
+	stderrScanner := bufio.NewScanner(stderr)
+	go e.handleStderr(stderrScanner)
 
 	return cmd, nil
 }
@@ -106,6 +123,8 @@ func (e *execStreamer) ExecAndWait() error {
 	if err != nil {
 		return err
 	}
+
+	e.stdOutAndErrWaitGroup.Wait()
 
 	err = cmd.Wait()
 	if err != nil {

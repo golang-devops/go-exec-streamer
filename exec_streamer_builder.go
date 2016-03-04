@@ -28,6 +28,8 @@ type ExecStreamerBuilder interface {
 
 	AutoFlush() ExecStreamerBuilder
 
+	DebugInfo(s string) ExecStreamerBuilder
+
 	Build() (ExecStreamer, error)
 }
 
@@ -99,6 +101,12 @@ func (e *execStreamerBuilder) StderrPrefix(prefix string) ExecStreamerBuilder {
 //AutoFlush enables the AutoFlush
 func (e *execStreamerBuilder) AutoFlush() ExecStreamerBuilder {
 	e.d.AutoFlush = true
+	return e
+}
+
+//DebugInfo adds debug info to be printed out when errors occur
+func (e *execStreamerBuilder) DebugInfo(s string) ExecStreamerBuilder {
+	e.d.DebugInfo = s
 	return e
 }
 
