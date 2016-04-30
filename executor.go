@@ -13,6 +13,8 @@ func NewExecutorFromName(name string) (*executor, error) {
 		return &executor{"cmd", []string{"/c"}}, nil
 	case "bash":
 		return &executor{"bash", []string{"-c"}}, nil
+	case "none":
+		return &executor{}, nil
 	default:
 		return nil, errors.New("Executor not supported, name: " + name)
 	}
