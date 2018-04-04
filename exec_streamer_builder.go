@@ -3,6 +3,7 @@ package execstreamer
 import (
 	"errors"
 	"io"
+	"io/ioutil"
 )
 
 //NewExecStreamerBuilder will create a builder to elegantly create a new ExecStreamer
@@ -127,10 +128,10 @@ func (e *execStreamerBuilder) Build() (ExecStreamer, error) {
 		return nil, errors.New("ExecStreamerBuilder requires Exe to be non-empty")
 	}
 	if e.d.StdoutWriter == nil {
-		return nil, errors.New("ExecStreamerBuilder requires StdoutWriter to be set")
+		e.d.StdoutWriter = ioutil.Discard
 	}
 	if e.d.StderrWriter == nil {
-		return nil, errors.New("ExecStreamerBuilder requires StderrWriter to be set")
+		e.d.StderrWriter = ioutil.Discard
 	}
 
 	return e.d, nil

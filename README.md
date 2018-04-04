@@ -39,6 +39,8 @@ func main() {
 }
 ```
 
+Note: `StdoutWriter` and `StderrWriter` is set to the `ioutil.Discard` writer by default.
+
 Now run it:
 
 ```
